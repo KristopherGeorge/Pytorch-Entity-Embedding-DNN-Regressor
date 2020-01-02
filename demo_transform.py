@@ -2,9 +2,6 @@ import pandas as pd
 import numpy as np
 import datetime
 
-# 一応leakageを避けるように設計
-# TODO: pandasの使い方を覚える
-
 
 DAYS_IN_A_WEEK = 7.0
 DAYS_IN_A_MONTH = 30.5
@@ -15,7 +12,6 @@ class MyTransform:
         self.y_zscore_flag = y_zscore
 
     def fit_transform(self, df, min_category_count=0.):
-        # 訓練データの目標変数 `price` だけ取り出す
         y = df['price'].values.copy()
         if self.y_zscore_flag:
             self.y_mean = y.mean()
@@ -90,7 +86,6 @@ class MyTransform:
                 self.general_transforms.append(general_trans)
 
             else:
-                # num_uniquesが1のcolはここ
                 general_trans = Dropper()
                 df, self.cols_information = general_trans.fit_transform(df, col, self.cols_information)
                 self.general_transforms.append(general_trans)
@@ -122,7 +117,6 @@ class MyTransform:
         return x, y
 
     def _df_to_numpy(self, df):
-        # pandas のデータフレームから、numpy の行列データを作成する
         x_categorical = df[self.cols_information["categorical_cols"]].values
         x_numerical = df[self.cols_information["numerical_cols"]].values
         return np.concatenate([x_categorical, x_numerical], axis=1)
@@ -522,7 +516,6 @@ class CategoryThreshold:
         pass
 
     def fit_transform(self, df, col_name, acum_ratio=0.99, min_count=5):
-        self.col_name_for_check = col_name
         val_cnt = df[col_name].value_counts()
 
         drop_target_series = val_cnt.cumsum() / val_cnt.sum() > acum_ratio
@@ -536,8 +529,6 @@ class CategoryThreshold:
         return df
 
     def transform(self, df, col_name):
-        if col_name != self.col_name_for_check:
-            raise Exception("Something wrong")
         df[col_name].replace(self.drop_targets, "category_thresholded", inplace=True)
         return df
 
@@ -552,7 +543,7 @@ class Dropper:
 
     def transform(self, df, col_name):
         if col_name != self.col_name_for_check:
-            raise Exception("Something wrong")
+            raise Exception("Could not transform. DataFrame construction is wrong.")
         return df
 
 
@@ -564,13 +555,13 @@ class Factorizer:
         self.col_name_for_check = col_name
 
         self.ct = CategoryThreshold()
-        df = self.ct.fit_transform(df, col_name, acum_ratio=1., min_count=min_category_count)  # 累積和と最少出現数でカテゴリ選別
+        df = self.ct.fit_transform(df, col_name, acum_ratio=1., min_count=min_category_count)
         df[col_name], self.dictionary = df[col_name].factorize()
         if -1 in df[col_name].values:
             self.fill_value = df[col_name].values.max() + 1.
-            df.loc[df[col_name] == -1, col_name] = self.fill_value  # 新しいカテゴリとする
+            df.loc[df[col_name] == -1, col_name] = self.fill_value
         else:
-            self.fill_value = df[col_name].value_counts().index[0]  # テスト時に初見カテゴリが現れたら最頻カテゴリとする
+            self.fill_value = df[col_name].value_counts().index[0]
 
         cols_info["cols"].append(col_name)
         cols_info["categorical_cols"].append(col_name)
@@ -580,7 +571,7 @@ class Factorizer:
 
     def transform(self, df, col_name):
         if col_name != self.col_name_for_check:
-            raise Exception("Something wrong")
+            raise Exception("Could not transform. DataFrame construction is wrong.")
         df = self.ct.transform(df, col_name)
 
         df[col_name] = self.dictionary.get_indexer(df[col_name])
@@ -598,7 +589,7 @@ class BinaryFactorizer:
         self.col_name_for_check = col_name
 
         df[col_name], self.dictionary = df[col_name].factorize()
-        self.fill_value = df[col_name].value_counts().index[0]  # テスト時に初見カテゴリが現れたら最頻カテゴリとする
+        self.fill_value = df[col_name].value_counts().index[0]
 
         self.mean = df[col_name].values.mean()
         self.std = df[col_name].values.std()
@@ -611,7 +602,7 @@ class BinaryFactorizer:
 
     def transform(self, df, col_name):
         if col_name != self.col_name_for_check:
-            raise Exception("Something wrong")
+            raise Exception("Could not transform. DataFrame construction is wrong.")
 
         df[col_name] = self.dictionary.get_indexer(df[col_name])
         if -1 in df[col_name].values:
@@ -646,7 +637,7 @@ class NumericalHandler:
 
     def transform(self, df, col_name):
         if col_name != self.col_name_for_check:
-            raise Exception("Something wrong")
+            raise Exception("Could not transform. DataFrame construction is wrong.")
 
         df[col_name].fillna(self.na_value, inplace=True)
         df[col_name] = (df[col_name].values - self.mean) / self.std
