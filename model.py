@@ -132,7 +132,7 @@ if __name__ == "__main__":
 
     # number of categorical variables: 4
     # number of numerical variables: 3
-    # batch sizeは: 2
+    # batch size: 2
     test_input = torch.tensor([[0., 3., 7., 4., 3.2, 1.22, -8.3],
                                [2., 1., 6., 3., 1.3, 0.56, -1.67]])
 
