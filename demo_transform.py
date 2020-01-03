@@ -90,7 +90,6 @@ class MyTransform:
                 df, self.cols_information = general_trans.fit_transform(df, col, self.cols_information)
                 self.general_transforms.append(general_trans)
 
-        # categorical, numericalの特徴量の数
         self.num_categorical = len(self.cols_information["categorical_cols"])
         self.num_numerical = len(self.cols_information["numerical_cols"])
 
@@ -464,8 +463,8 @@ class HostSinceTrans:
     def fit_transform(self, train_df):
         host_since = train_df["host_since"].values
         dates, nan_indices = self._host_since_to_dates(host_since)
-        self.kizyun_date = dates[0]      # param
-        day_diff = self._dates_to_day_diff(dates, self.kizyun_date)
+        self.reference_date = dates[0]      # param
+        day_diff = self._dates_to_day_diff(dates, self.reference_date)
         self.day_diff_mean = day_diff.sum() / (len(day_diff) - len(nan_indices))     # param
         day_diff[nan_indices] = self.day_diff_mean
         train_df["day_diff"] = day_diff
@@ -475,7 +474,7 @@ class HostSinceTrans:
     def transform(self, test_df):
         host_since = test_df["host_since"].values
         dates, nan_indices = self._host_since_to_dates(host_since)
-        day_diff = self._dates_to_day_diff(dates, self.kizyun_date)
+        day_diff = self._dates_to_day_diff(dates, self.reference_date)
         day_diff[nan_indices] = self.day_diff_mean
         test_df["day_diff"] = day_diff
         test_df = test_df.drop("host_since", axis=1)
@@ -498,11 +497,11 @@ class HostSinceTrans:
 
         return dates, nan_indices
 
-    def _dates_to_day_diff(self, dates, kizyun_date):
+    def _dates_to_day_diff(self, dates, reference_date):
         day_diff = []
         for i in range(len(dates)):
             if type(dates[i]) == datetime.date:
-                day_diff.append((kizyun_date - dates[i]).days)
+                day_diff.append((reference_date - dates[i]).days)
             else:
                 day_diff.append(0.0)
 
