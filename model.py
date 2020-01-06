@@ -3,9 +3,9 @@ import torch.nn as nn
 
 
 '''
-#####################################################################################
-######### Implementation of DNN-regressor using Entity Embedding by Pytorch #########
-#####################################################################################
+########################################################################################
+######### Implementation of DNN-regressor using Entity Embedding[1] by Pytorch #########
+########################################################################################
 
 An implementation of DNN for regression with input of factorized (*) categorical variables (first half) and numerical variables (second half).
 Preparing a unique Embedding Layer for each categorical variable and perform mapping to the corresponding dense vector space (Entity Embedding).
@@ -20,7 +20,7 @@ Regression is performed by combining the embedded categorical features and numer
 #######################################
 
     categorical_dicts_to_dims  : Embedding Layer design for each categorical variable, specified by multiple pairs of
-                                 [(number of dictionaries), (number of dimensions after embedding)].
+                                 [(number of dictionaries), (dimension of the embedded feature)].
                                  Specifying an empty list results in
                                  a regular fully connected network without categorical variables.
                                       Example: [[7, 2], [10, 3]]
@@ -40,7 +40,10 @@ Regression is performed by combining the embedded categorical features and numer
                         input  : A mini-batch of input data with categorical variables factorized in 
                                  the first half and numerical variables in the second half.
                                  The categorical variables need to follow the design at the time of model creation
-                                 (number of variables, number of dictionaries for each variable).
+                                 (number of variables, number of dictionaries for each categorical variable).
+
+
+[1] Guo, Cheng, and Felix Berkhahn. "Entity embeddings of categorical variables." arXiv preprint arXiv:1604.06737 (2016).
 '''
 
 
@@ -75,7 +78,8 @@ class CategoricalDnn(nn.Module):
             self.embedding_layer_list.append(
                 nn.Sequential(
                     nn.Embedding(num_dict, target_dim),
-                    nn.BatchNorm1d(target_dim)
+                    nn.BatchNorm1d(target_dim),
+                    # nn.ReLU(inplace=True)
                 )
             )
             self.num_embedded_features += target_dim
@@ -87,7 +91,7 @@ class CategoricalDnn(nn.Module):
          Properties:
              self.fc_layer_list   :   List of Fully Connected Layers that take embedded categorical features and
                                       numerical variables as inputs
-             self.output_layer    :   output layer
+             self.output_layer    :   Output layer
         """
         num_input = self.num_embedded_features + num_numerical_features
         self.fc_layer_list = nn.ModuleList()
@@ -136,11 +140,8 @@ if __name__ == "__main__":
     test_input = torch.tensor([[0., 3., 7., 4., 3.2, 1.22, -8.3],
                                [2., 1., 6., 3., 1.3, 0.56, -1.67]])
 
-    # setting embedding layer of each categorical variable
-    embedding_construction = [[3, 2], [4, 2], [10, 4], [7, 3]]
-
     # model definition
-    model = CategoricalDnn(categorical_dicts_to_dims=embedding_construction,
+    model = CategoricalDnn(categorical_dicts_to_dims=[[3, 2], [4, 2], [10, 4], [7, 3]],
                            num_numerical_features=3,
                            fc_layers_construction=[30, 20, 20],
                            dropout_probability=0.)
