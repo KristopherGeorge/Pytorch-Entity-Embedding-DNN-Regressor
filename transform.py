@@ -1,13 +1,28 @@
 import pandas as pd
 import numpy as np
+import warnings
+
+
+def message_fitted_transform(info):
+    print("Transformer (TransformDF2Numpy) fitted.")
+    print("Number of the categorical variables:", len(info["categorical_variables"]))
+    print("Number of the numerical variables:", len(info["numerical_variables"]))
+    print("-----------------------------------------")
 
 
 class TransformDF2Numpy:
-    def __init__(self, objective_col, y_zscore=True):
+    def __init__(self, objective_col,
+                 y_zscore=True,
+                 min_category_count=0.,
+                 scaling_robustness_factor=0.,
+                 fillnan_robustness_factor=0.):
         self.objective_col = objective_col if type(objective_col) == str else ValueError("objective_col must be str")
         self.y_zscore_flag = y_zscore
+        self.min_category_count = min_category_count
+        self.scaling_robustness_factor = scaling_robustness_factor
+        self.fillnan_robustness_factor = fillnan_robustness_factor
 
-    def fit_transform(self, df, min_category_count=0.):
+    def fit_transform(self, df):
         y = df[self.objective_col].values.copy()
         if self.y_zscore_flag:
             self.y_mean = y.mean()
@@ -40,9 +55,8 @@ class TransformDF2Numpy:
                 self.transforms.append(trans)
 
             elif (num_uniques > 2) and (not is_numeric):
-                trans = Factorizer()
-                df, self.variable_information = trans.fit_transform(df, col, self.variable_information,
-                                                                    min_category_count)
+                trans = Factorizer(self.min_category_count)
+                df, self.variable_information = trans.fit_transform(df, col, self.variable_information)
                 self.transforms.append(trans)
                 categorical_transform_index.append(i)
 
@@ -53,12 +67,8 @@ class TransformDF2Numpy:
                 numerical_transform_index.append(i)
 
             elif is_numeric:
-                trans = NumericalHandler()
-                if col == "host_listing_count":
-                    df, self.variable_information = trans.fit_transform(df, col, self.variable_information,
-                                                                        na_type="median")
-                else:
-                    df, self.variable_information = trans.fit_transform(df, col, self.variable_information)
+                trans = NumericalHandler(self.scaling_robustness_factor, self.fillnan_robustness_factor)
+                df, self.variable_information = trans.fit_transform(df, col, self.variable_information)
                 self.transforms.append(trans)
                 numerical_transform_index.append(i)
 
@@ -74,6 +84,8 @@ class TransformDF2Numpy:
         self.num_numerical = len(self.variable_information["numerical_variables"])
 
         x = self._df_to_numpy(df)
+
+        message_fitted_transform(self.variable_information)
 
         return x, y
 
@@ -95,7 +107,7 @@ class TransformDF2Numpy:
         return np.concatenate([x_categorical, x_numerical], axis=1)
 
     def get_transform(self, index_or_colname):
-        if type(index_or_colname) == int:
+        if type(index_or_colname) in [int, np.int, np.int8, np.int16, np.int32, np.int64]:
             return self.transforms[self.variable_information["transform_index"][index_or_colname]]
         elif type(index_or_colname) == str:
             index = self.variable_information["variables"].index(index_or_colname)
@@ -104,19 +116,15 @@ class TransformDF2Numpy:
             raise ValueError("Input must be a index (int) or a name of variable (str)")
 
 
-
 class CategoryThreshold:
     def __init__(self):
         pass
 
-    def fit_transform(self, df, col_name, acum_ratio=0.99, min_count=5):
+    def fit_transform(self, df, col_name, min_count=5):
         val_cnt = df[col_name].value_counts()
-
-        drop_target_series = val_cnt.cumsum() / val_cnt.sum() > acum_ratio
-        drop_target_series_count = val_cnt < min_count
-        drop_target_series = drop_target_series | drop_target_series_count
-
+        drop_target_series = val_cnt < min_count
         self.drop_targets = drop_target_series[drop_target_series].index
+
         df[col_name].replace(self.drop_targets, "category_thresholded", inplace=True)
         print("category thresholded (", col_name, ")", end="")
         print(", dropped categories: ", len(self.drop_targets))
@@ -142,14 +150,14 @@ class Dropper:
 
 
 class Factorizer:
-    def __init__(self):
-        pass
+    def __init__(self, min_category_count):
+        self.min_category_count = min_category_count
 
-    def fit_transform(self, df, col_name, variable_info, min_category_count):
+    def fit_transform(self, df, col_name, variable_info):
         self.col_name = col_name
 
         self.ct = CategoryThreshold()
-        df = self.ct.fit_transform(df, col_name, acum_ratio=1., min_count=min_category_count)
+        df = self.ct.fit_transform(df, col_name, min_count=self.min_category_count)
         df[col_name], self.dictionary = df[col_name].factorize()
         if -1 in df[col_name].values:
             self.fill_value = df[col_name].values.max() + 1.
@@ -204,22 +212,44 @@ class BinaryFactorizer:
         return df
 
 
-class NumericalHandler:
-    def __init__(self):
-        pass
+def get_fillnan(values, fillnan_robustness_factor):
+    values = values[~np.isnan(values)]
+    values = np.sort(values)
+    start_index = int(len(values) / 2 * fillnan_robustness_factor)  # robustness_factorは片側
+    gorl_index = int(len(values) - start_index - 1)
+    nan_value = values[start_index:gorl_index].mean()
+    return nan_value
 
-    def fit_transform(self, df, col_name, variable_info, na_type="mean"):
+
+def get_mean_std(values, scaling_robustness_factor, col_name):
+    values = np.sort(values)
+    start_index = int(len(values) / 2 * scaling_robustness_factor)  # robustness_factorは片側
+    gorl_index = int(len(values) - start_index - 1)
+    std = values[start_index:gorl_index].std() + 0.000001
+    if std == 0.000001:
+        message = "Warning: Robust scaling of the variable:'%s' was failed due to infinite std appeared." % col_name\
+                  + " The mean and std will be calculated by all values instead."
+        warnings.warn(message)
+        std = values.std() + 0.000001
+        mean = values.mean()
+        return mean, std
+    else:
+        mean = values[start_index:gorl_index].mean()
+        return mean, std
+
+
+class NumericalHandler:
+    def __init__(self, scaling_robustness_factor, fillnan_robustness_factor):
+        self.scaling_robustness_factor = scaling_robustness_factor
+        self.fillnan_robustness_factor = fillnan_robustness_factor
+
+    def fit_transform(self, df, col_name, variable_info):
         self.col_name = col_name
 
-        if na_type == "mean":
-            self.na_value = df[col_name].mean()
-        elif na_type == "median":
-            self.na_value = df[col_name].median()
-        else:
-            raise ValueError("invalid na_type")
-        df[col_name].fillna(self.na_value, inplace=True)
-        self.mean = df[col_name].mean()
-        self.std = df[col_name].std()
+        self.nan_value = get_fillnan(df[col_name].values, self.fillnan_robustness_factor)
+        df[col_name].fillna(self.nan_value, inplace=True)
+
+        self.mean, self.std = get_mean_std(df[col_name].values, self.scaling_robustness_factor, col_name)
         df[col_name] = (df[col_name].values - self.mean) / self.std
 
         variable_info["numerical_variables"].append(col_name)
@@ -230,7 +260,7 @@ class NumericalHandler:
         if col_name != self.col_name:
             raise ValueError("Could not transform. DataFrame construction is wrong.")
 
-        df[col_name].fillna(self.na_value, inplace=True)
+        df[col_name].fillna(self.nan_value, inplace=True)
         df[col_name] = (df[col_name].values - self.mean) / self.std
 
         return df
@@ -249,8 +279,9 @@ if __name__ == "__main__":
     processed_df_train = p.fit_transform(df_train)
     processed_df_val = p.transform(df_val)
 
-    t = TransformDF2Numpy(y_zscore=True)
-    x_train, y_train = t.fit_transform(processed_df_train, min_category_count=3)
+    t = TransformDF2Numpy('price', y_zscore=True, min_category_count=0,
+                          scaling_robustness_factor=0.01, fillnan_robustness_factor=0.0001)
+    x_train, y_train = t.fit_transform(processed_df_train)
     x_val, y_val = t.transform(processed_df_val)
 
     for i, variable in enumerate(t.variable_information["variables"]):
