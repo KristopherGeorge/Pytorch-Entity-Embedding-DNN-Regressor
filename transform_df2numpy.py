@@ -2,6 +2,143 @@ import pandas as pd
 import numpy as np
 import warnings
 
+'''
+TransformDF2Numpy is a simple tool for quick transformation from pandas.DataFrame to numpy.array dataset,
+containing some utilities such as re-transformation of new data,
+minimal pre-processing, and access to variable information.
+
+##################
+###  Overview  ###
+##################
+
+    + Transform a training set of DataFrame to a numpy.array dataset, and fit a transformer instance.
+      The numpy.array containing factorized (*) categorical variables (first half)
+      and numerical variables (second half).
+    
+    + Utilities of a fitted transformer instance.
+        + Transforming New DataFrame samely as DataFrame used for fitting.
+        + Access to variable information.
+            + variable index to name, or name to index.
+            + list of variable names (all, categorical, numerical).
+            + list of unique categories of each categorical variable.
+    
+    + Minimal pre-processing (optional).
+        + Scaling numerical variables.
+            + robustness control by a parameter
+        + Thresholding categorical variables by minimum count of each variable.
+        + Filling missing values.
+            + new category (or the most frequent category) for categorical variables.
+            + mean value for numerical variables.
+            + robustness control by a parameter.
+
+####################
+###  Parameters  ###
+####################
+
+              objective_col   : str (optional, default None)
+                                The column name of objective variable.
+                                If you specify this, the instance automatically find the column
+                                and the output numpy array will be splitted into
+                                x (explanatory variables) and y (objective variables).
+
+          objective_scaling   : bool (optional, default False)
+                                The flag for scaling objective variable.
+
+          numerical_scaling   : bool (optional, default False)
+                                The flag for scaling numerical variables.
+
+  scaling_robustness_factor   : float in range of [0. 1.] (optional, default 0.)
+                                The parameter to control robustness of scaling operation.
+                                Specifying a larger value will make it more robust against outliers.
+
+                    fillnan   : bool (optional, default True)
+                                The flag to fill missing values (nan, NaN).
+                                If True, the numerical nan will be filled with the mean,
+                                and the categorical nan will be filled as new category (or most frequent category).
+                                If False, the numerical nan will not be filled,
+                                and the categorical nan will be filled with -1.
+
+  fillnan_robustness_factor   : float in range of [0. 1.] (optional, default 0.)
+                                The parameter to control robustness of calculating the filling value to nan.
+                                Specifying a larger value will make it more robust against outliers.
+
+         min_category_count   : integer (optional, default 0)
+                                The minimum number of appearance of each category, in each categorical variable.
+                                The categories with a number of appearance below this parameter will be thresholded,
+                                and treated as a new single category.
+
+#################
+###  Methods  ###
+#################
+
+    fit_transform(self, df)
+              Input:   training set of DataFrame
+             Return:   x, (y)
+                       x : The numpy.array containing factorized (*) categorical variables (first half)
+                           and numerical variables (second half).
+                           The variables which have only two unique categories are treated as numerical variable.
+                       y : numpy array of objective variable (returned only when objective column exists)
+    
+    transform(self, df)
+              Input:   testing set of DataFrame
+             Return:   x, (y)
+                       x : numpy array of explanatory variables
+                       (y : numpy array of objective variable) (only when objective column exists)
+    
+    index(self, colname)
+              Input:   column name of DataFrame
+             Return:   the corresponding column index of numpy array
+    
+    variable_name(self, index)
+              Input:   column index of numpy array
+             Return:   the corresponding column name of DataFrame
+    
+    dictionary(self, index_or_colname)
+              Input:   column name of DataFrame, or column index of numpy array
+             Return:   the list of unique categories in the variable which index correspond to the factorized values
+
+    category_to_factorized(self, index_or_colname, category_name):
+              Input:
+                       index_or_colname : column name of DataFrame, or column index of numpy array
+                          category_name : name of the single category
+             Return:   the factorized value
+
+    factorized_to_category(self, index_or_colname, factorized_value):
+              Input:
+                       index_or_colname : column name of DataFrame, or column index of numpy array
+                       factorized_value : factorized value of the single category
+             Return:   the name of the single category
+    
+    nuniques(self)
+             Return:   the list of the number of unique categories of the categorical variables
+    
+    nunique(self, index_or_colname)
+              Input:   column name of DataFrame, or column index of numpy array
+             Return:   the number of unique categories of the categorical variable
+    
+    variables(self)
+             Return:  the list of the name of all variables in order of the output numpy array
+    
+    categorical_variables(self)
+             Return:  the list of the name of categorical variables in order of the output numpy array
+    
+    numerical_variables(self)
+             Return:  the list of the name of numerical variables in order of the output numpy array
+
+####################
+###  Attributes  ###
+####################
+
+              self.y_mean   :  the mean of the objective variable before scaling
+    
+               self.y_std   :  the standard deviation of the objective variable before scaling
+    
+    self.num_categoricals   :  the number of the categorical variables
+    
+      self.num_numericals   :  the number of the numerical variables
+
+
+'''
 
 # global parameters
 logging = True
@@ -19,7 +156,7 @@ class TransformDF2Numpy:
                  scaling_robustness_factor=0.,
                  fillnan=True,
                  fillnan_robustness_factor=0.,
-                 min_category_count=0.):
+                 min_category_count=0):
 
         # param for objective variable
         if objective_col is not None:
@@ -44,14 +181,16 @@ class TransformDF2Numpy:
         self.min_category_count = min_category_count
 
     def fit_transform(self, df):
-        start_message_fit_transform() if logging else None
+        _start_message_fit_transform() if logging else None
 
         if self.objective_col:
             y = df[self.objective_col].values.copy()
             if self.objective_scaling:
-                self.y_mean = y.mean()
-                self.y_std = y.std()
+                self.y_mean, self.y_std = _get_mean_std_for_scaling(y, self.scaling_robustness_factor,
+                                                                    self.objective_col)
                 y = (y - self.y_mean) / self.y_std
+            else:
+                self.y_mean, self.y_std = None, None
 
         # information of variables
         self.variable_information = {
@@ -107,7 +246,7 @@ class TransformDF2Numpy:
 
         x = self._df_to_numpy(df)
 
-        end_message_fit_transform(self.variable_information) if logging else None
+        _end_message_fit_transform(self.variable_information) if logging else None
 
         return (x, y) if self.objective_col else x
 
@@ -127,20 +266,6 @@ class TransformDF2Numpy:
 
         return (x, y) if y_exist else x
 
-    def _df_to_numpy(self, df):
-        x_categorical = df[self.variable_information["categorical_variables"]].values
-        x_numerical = df[self.variable_information["numerical_variables"]].values
-        return np.concatenate([x_categorical, x_numerical], axis=1)
-
-    def _get_transform(self, index_or_colname):
-        if type(index_or_colname) in [int, np.int, np.int8, np.int16, np.int32, np.int64]:
-            return self.transforms[self.variable_information["transform_index"][index_or_colname]]
-        elif type(index_or_colname) == str:
-            index = self.variable_information["variables"].index(index_or_colname)
-            return self.transforms[self.variable_information["transform_index"][index]]
-        else:
-            raise ValueError("Input must be an index (int) or a name of variable (str)")
-
     def index(self, colname):
         return self.variable_information["variables"].index(colname)
 
@@ -153,6 +278,13 @@ class TransformDF2Numpy:
             return trans.dictionary
         else:
             raise ValueError("Specified variable is numerical.")
+
+    def category_to_factorized(self, index_or_colname, category_name):
+        dictionary = self.dictionary(index_or_colname)
+        return float(np.where(dictionary == category_name)[0][0])
+
+    def factorized_to_category(self, index_or_colname, factorized_value):
+        return self.dictionary(index_or_colname)[factorized_value]
 
     def nuniques(self):
         return self.variable_information["categorical_uniques"]
@@ -176,16 +308,30 @@ class TransformDF2Numpy:
     def numerical_variables(self):
         return self.variable_information["numerical_variables"]
 
+    def _df_to_numpy(self, df):
+        x_categorical = df[self.variable_information["categorical_variables"]].values
+        x_numerical = df[self.variable_information["numerical_variables"]].values
+        return np.concatenate([x_categorical, x_numerical], axis=1)
+
+    def _get_transform(self, index_or_colname):
+        if type(index_or_colname) in [int, np.int, np.int8, np.int16, np.int32, np.int64]:
+            return self.transforms[self.variable_information["transform_index"][index_or_colname]]
+        elif type(index_or_colname) == str:
+            index = self.variable_information["variables"].index(index_or_colname)
+            return self.transforms[self.variable_information["transform_index"][index]]
+        else:
+            raise ValueError("Input must be an index (int) or a name of variable (str)")
+
 
 ############################
 ###  Internal Functions  ###
 ############################
 
-def start_message_fit_transform():
+def _start_message_fit_transform():
     print("Starting to fit a transformer of TransformDF2Numpy.")
 
 
-def end_message_fit_transform(info):
+def _end_message_fit_transform(info):
     print()
     print("Transformer fitted.")
     print("Number of the categorical variables:", len(info["categorical_variables"]))
@@ -193,23 +339,42 @@ def end_message_fit_transform(info):
     print("---------------------------------------------------")
 
 
-def fit_factorize_fillnan_true(df, col_name):
+def _message_categories_thresholed(col_name, num_valids, num_dropped):
+    print("Categories thresholded: (column: '%s'), (valid categories: %d, dropped categories: %d)"
+          % (col_name, num_valids, num_dropped))
+
+
+def _message_numerical_nans_filled(col_name, nan_count, nan_value):
+    print("Numerical NaNs filled with alternative value: (column: '%s'), (filled rows: %d, value: %f)"
+          % (col_name, nan_count, nan_value))
+
+
+def _message_categirical_nans_filled(col_name, nan_count, factorized_nan_value):
+    message = "Categorical NaNs filled with alternative value: (column: '%s'), " % col_name +\
+              "(filled rows: %d, factorized value: %f, category: %s)" % (nan_count, factorized_nan_value, NEW_CATEGORY)
+    print(message)
+
+
+def _fit_factorize_fillnan_true(df, col_name):
     nan_count = df[col_name].isnull().sum()
     if nan_count:
         nan_value = NEW_CATEGORY         # nan will be replaced by new category
+        df[col_name].fillna(nan_value, inplace=True)
+        df[col_name], dictionary = df[col_name].factorize()
+        factorized_nan_value = np.where(dictionary == NEW_CATEGORY)[0][0]
+        _message_categirical_nans_filled(col_name, nan_count, factorized_nan_value)
     else:
         nan_value = df[col_name].mode()[0]      # future nan will be replaced by most frequently appeared category
-    df[col_name].fillna(nan_value, inplace=True)
-    df[col_name], dictionary = df[col_name].factorize()
+        df[col_name], dictionary = df[col_name].factorize()
     return df, dictionary, nan_value
 
 
-def fit_factorize_fillnan_false(df, col_name):
+def _fit_factorize_fillnan_false(df, col_name):
     df[col_name], dictionary = df[col_name].factorize()
     return df, dictionary
 
 
-def get_numerical_nan_value(values, fillnan_robustness_factor):
+def _get_numerical_nan_value(values, fillnan_robustness_factor):
     values = values[~np.isnan(values)]
     values = np.sort(values)
     start_index = int(len(values) / 2 * fillnan_robustness_factor)  # robustness_factorは片側
@@ -218,7 +383,7 @@ def get_numerical_nan_value(values, fillnan_robustness_factor):
     return nan_value
 
 
-def get_mean_std_for_scaling(values, scaling_robustness_factor, col_name):
+def _get_mean_std_for_scaling(values, scaling_robustness_factor, col_name):
     values = values[~np.isnan(values)]
     values = np.sort(values)
     start_index = int(len(values) / 2 * scaling_robustness_factor)  # robustness_factorは片側
@@ -226,7 +391,7 @@ def get_mean_std_for_scaling(values, scaling_robustness_factor, col_name):
     std = values[start_index:gorl_index].std() + 0.000001
     if std == 0.000001:
         if logging:
-            message = "Warning: Robust scaling of the variable:'%s' was failed due to infinite std appeared." % col_name\
+            message = "Robust scaling of the variable:'%s' was failed due to infinite std appeared." % col_name\
                       + " The mean and std will be calculated by all values instead."
             warnings.warn(message)
         std = values.std() + 0.000001
@@ -253,7 +418,7 @@ class CategoryThreshold:
         drop_targets = list(set(df[col_name].values) - set(self.valid_categories) - set([np.nan]))
         df[col_name].replace(drop_targets, DROPPED_CATEGORY, inplace=True)
         if len(drop_targets) != 0 and logging:
-            print("Some categories were thresholded in '%s', (dropped categories: %d)" % (col_name, len(drop_targets)))
+            _message_categories_thresholed(col_name, len(self.valid_categories), len(drop_targets))
         return df
 
     def transform(self, df, col_name):
@@ -288,9 +453,9 @@ class Factorizer:
         df = self.ct.fit_transform(df, col_name, min_count=self.min_category_count)
 
         if self.fillnan_flag:
-            df, self.dictionary, self.nan_value = fit_factorize_fillnan_true(df, col_name)
+            df, self.dictionary, self.nan_value = _fit_factorize_fillnan_true(df, col_name)
         else:
-            df, self.dictionary = fit_factorize_fillnan_false(df, col_name)
+            df, self.dictionary = _fit_factorize_fillnan_false(df, col_name)
 
         variable_info["categorical_variables"].append(col_name)
         self.num_uniques = len(self.dictionary)
@@ -326,15 +491,14 @@ class BinaryFactorizer:
         nan_count = (df[col_name].values == -1).sum()
         if self.fillnan_flag and nan_count:
             df.loc[df[col_name] == -1, col_name] = np.nan
-            self.nan_value = get_numerical_nan_value(df[col_name].values, self.fillnan_robustness_factor)
+            self.nan_value = _get_numerical_nan_value(df[col_name].values, self.fillnan_robustness_factor)
             df[col_name].fillna(self.nan_value, inplace=True)
-            print("nan was filled with alternative value in '%s', (filled rows: %d, value: %f)"
-                  % (col_name, nan_count, self.nan_value)) if logging else None
+            _message_numerical_nans_filled(col_name, nan_count, self.nan_value) if logging else None
         elif not self.fillnan_flag and nan_count:
             df.loc[df[col_name] == -1, col_name] = np.nan
 
         if self.scaling_flag:
-            self.mean, self.std = get_mean_std_for_scaling(df[col_name].values,
+            self.mean, self.std = _get_mean_std_for_scaling(df[col_name].values,
                                                            self.scaling_robustness_factor,
                                                            col_name)
             df[col_name] = (df[col_name].values - self.mean) / self.std
@@ -371,15 +535,14 @@ class NumericalHandler:
         self.col_name = col_name
 
         if self.fillnan_flag:
-            self.nan_value = get_numerical_nan_value(df[col_name].values, self.fillnan_robustness_factor)
+            self.nan_value = _get_numerical_nan_value(df[col_name].values, self.fillnan_robustness_factor)
             nan_count = (df[col_name].isnull()).sum()
             if nan_count:
-                print("nan was filled with alternative value in '%s', (filled rows: %d, value: %f)"
-                      % (col_name, nan_count, self.nan_value)) if logging else None
+                _message_numerical_nans_filled(col_name, nan_count, self.nan_value) if logging else None
                 df[col_name].fillna(self.nan_value, inplace=True)
 
         if self.scaling_flag:
-            self.mean, self.std = get_mean_std_for_scaling(df[col_name].values, self.scaling_robustness_factor, col_name)
+            self.mean, self.std = _get_mean_std_for_scaling(df[col_name].values, self.scaling_robustness_factor, col_name)
             df[col_name] = (df[col_name].values - self.mean) / self.std
 
         variable_info["numerical_variables"].append(col_name)
@@ -413,15 +576,15 @@ if __name__ == "__main__":
     processed_df_train = p.fit_transform(df_train)
     processed_df_val = p.transform(df_val)
 
-    t = TransformDF2Numpy(objective_col='price',
+    t = TransformDF2Numpy(objective_col=None,
                           objective_scaling=True,
                           numerical_scaling=True,
                           scaling_robustness_factor=0.0001,
                           fillnan=True,
                           fillnan_robustness_factor=0.05,
-                          min_category_count=3)
-    x_train, y_train = t.fit_transform(processed_df_train)
-    x_val, y_val = t.transform(processed_df_val)
+                          min_category_count=2)
+    x_train = t.fit_transform(processed_df_train)
+    x_val = t.transform(processed_df_val)
 
     print()
     print("all variables:")
