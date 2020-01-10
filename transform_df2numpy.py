@@ -18,9 +18,10 @@ minimal pre-processing, and access to variable information.
     + Utilities of a fitted transformer instance.
         + Transforming New DataFrame samely as DataFrame used for fitting.
         + Access to variable information.
-            + variable index to name, or name to index.
-            + list of variable names (all, categorical, numerical).
-            + list of unique categories of each categorical variable.
+            + linking variable index and name
+            + variable names (all, categorical, numerical)
+            + linking factorized value and category name
+            + unique categories of categorical variables
     
     + Minimal pre-processing (optional).
         + Scaling numerical variables.
@@ -28,8 +29,8 @@ minimal pre-processing, and access to variable information.
         + Thresholding categorical variables by minimum count of each variable.
         + Filling missing values.
             + new category (or the most frequent category) for categorical variables.
-            + mean value for numerical variables.
-            + robustness control by a parameter.
+            + mean value for numerical variables
+            + robustness control by a parameter
 
 ####################
 ###  Parameters  ###
@@ -82,8 +83,8 @@ minimal pre-processing, and access to variable information.
     transform(self, df)
               Input:   testing set of DataFrame
              Return:   x, (y)
-                       x : numpy array of explanatory variables
-                       (y : numpy array of objective variable) (only when objective column exists)
+                       x : numpy array of explanatory variables same as fit_transform()
+                       y : numpy array of objective variable (only when objective column exists)
     
     index(self, colname)
               Input:   column name of DataFrame
