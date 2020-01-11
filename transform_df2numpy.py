@@ -86,11 +86,11 @@ minimal pre-processing, and access to variable information.
                        x : numpy array of explanatory variables same as fit_transform()
                        y : numpy array of objective variable (only when objective column exists)
     
-    index(self, colname)
+    name_to_index(self, colname)
               Input:   column name of DataFrame
              Return:   the corresponding column index of numpy array
     
-    variable_name(self, index)
+    index_to_name(self, index)
               Input:   column index of numpy array
              Return:   the corresponding column name of DataFrame
     
@@ -267,10 +267,10 @@ class TransformDF2Numpy:
 
         return (x, y) if y_exist else x
 
-    def index(self, colname):
+    def name_to_index(self, colname):
         return self.variable_information["variables"].index(colname)
 
-    def variable_name(self, index):
+    def index_to_name(self, index):
         return self.variable_information["variables"][index]
 
     def dictionary(self, index_or_colname):
@@ -278,7 +278,7 @@ class TransformDF2Numpy:
         if type(trans) == Factorizer or BinaryFactorizer:
             return trans.dictionary
         else:
-            raise ValueError("Specified variable is numerical.")
+            raise ValueError("Specified variable has no dictionary.")
 
     def category_to_factorized(self, index_or_colname, category_name):
         dictionary = self.dictionary(index_or_colname)
