@@ -12,8 +12,8 @@ minimal pre-processing, and access to variable information.
 ##################
 
     + Transform a training set of DataFrame to a numpy.array dataset, and fit a transformer instance.
-      The numpy.array containing factorized (*) categorical variables (first half)
-      and numerical variables (second half).
+      The numpy.array containing the factorized categorical variables (first half)
+      and the numerical variables (second half).
     
     + Utilities of a fitted transformer instance.
         + Transforming New DataFrame samely as DataFrame used for fitting.
@@ -31,6 +31,8 @@ minimal pre-processing, and access to variable information.
             + new category (or the most frequent category) for categorical variables.
             + mean value for numerical variables
             + robustness control by a parameter
+
+    (Note: A categorical variable which has only two unique categories is treated as a numerical variable)
 
 ####################
 ###  Parameters  ###
@@ -77,23 +79,36 @@ minimal pre-processing, and access to variable information.
              Return:   x, (y)
                        x : The numpy.array containing factorized (*) categorical variables (first half)
                            and numerical variables (second half).
-                           The variables which have only two unique categories are treated as numerical variable.
+                           The variables which have only two unique categories are treated as numerical variables.
                        y : numpy array of objective variable (returned only when objective column exists)
-    
+
     transform(self, df)
               Input:   testing set of DataFrame
              Return:   x, (y)
                        x : numpy array of explanatory variables same as fit_transform()
                        y : numpy array of objective variable (only when objective column exists)
+
+    variables(self)
+             Return:  the list of the name of all variables in order of the output numpy array
     
+    categorical_variables(self)
+             Return:  the list of the name of categorical variables in order of the output numpy array
+
+    numerical_variables(self)
+             Return:  the list of the name of numerical variables in order of the output numpy array
+
     name_to_index(self, colname)
               Input:   column name of DataFrame
              Return:   the corresponding column index of numpy array
-    
+
     index_to_name(self, index)
               Input:   column index of numpy array
              Return:   the corresponding column name of DataFrame
-    
+
+    is_numerical(self, index_or_colname)
+              Input:   column index of numpy array
+             Return:   the bool indicating whether the variable is treated as a numerical variable or not
+
     dictionary(self, index_or_colname)
               Input:   column name of DataFrame, or column index of numpy array
              Return:   the list of unique categories in the variable which index correspond to the factorized values
@@ -109,22 +124,13 @@ minimal pre-processing, and access to variable information.
                        index_or_colname : column name of DataFrame, or column index of numpy array
                        factorized_value : factorized value of the single category
              Return:   the name of the single category
-    
+
     nuniques(self)
              Return:   the list of the number of unique categories of the categorical variables
-    
+
     nunique(self, index_or_colname)
               Input:   column name of DataFrame, or column index of numpy array
              Return:   the number of unique categories of the categorical variable
-    
-    variables(self)
-             Return:  the list of the name of all variables in order of the output numpy array
-    
-    categorical_variables(self)
-             Return:  the list of the name of categorical variables in order of the output numpy array
-    
-    numerical_variables(self)
-             Return:  the list of the name of numerical variables in order of the output numpy array
 
 ####################
 ###  Attributes  ###
@@ -211,7 +217,8 @@ class TransformDF2Numpy:
 
             if (col == self.objective_col) or (num_uniques == 1):
                 trans = Dropper()
-                df, self.variable_information = trans.fit_transform(df, col, self.variable_information)
+                df, self.variable_information = trans.fit_transform(df, col, self.variable_information,
+                                                                    self.objective_col)
                 self.transforms.append(trans)
 
             elif (num_uniques > 2) and (not is_numeric):
@@ -267,11 +274,27 @@ class TransformDF2Numpy:
 
         return (x, y) if y_exist else x
 
+    def variables(self):
+        return self.variable_information["variables"]
+
+    def categorical_variables(self):
+        return self.variable_information["categorical_variables"]
+
+    def numerical_variables(self):
+        return self.variable_information["numerical_variables"]
+
     def name_to_index(self, colname):
         return self.variable_information["variables"].index(colname)
 
     def index_to_name(self, index):
         return self.variable_information["variables"][index]
+
+    def is_numerical(self, index_or_colname):
+        trans = self._get_transform(index_or_colname)
+        if type(trans) == Factorizer:
+            return False
+        else:
+            return True
 
     def dictionary(self, index_or_colname):
         trans = self._get_transform(index_or_colname)
@@ -281,11 +304,30 @@ class TransformDF2Numpy:
             raise ValueError("Specified variable has no dictionary.")
 
     def category_to_factorized(self, index_or_colname, category_name):
+        trans = self._get_transform(index_or_colname)
         dictionary = self.dictionary(index_or_colname)
-        return float(np.where(dictionary == category_name)[0][0])
+        if type(trans) == Factorizer:
+            return float(np.where(dictionary == category_name)[0][0])
+        elif type(trans) == BinaryFactorizer:
+            dictionary = self.dictionary(index_or_colname)
+            if self.numerical_scaling:
+                return float((np.where(dictionary == category_name)[0][0] - trans.mean) / trans.std)
+            else:
+                return float(np.where(dictionary == category_name)[0][0])
 
     def factorized_to_category(self, index_or_colname, factorized_value):
-        return self.dictionary(index_or_colname)[factorized_value]
+        trans = self._get_transform(index_or_colname)
+        dictionary = self.dictionary(index_or_colname)
+        if type(trans) == Factorizer:
+            return dictionary[factorized_value]
+        elif type(trans) == BinaryFactorizer:
+            if self.numerical_scaling:
+                if float.is_integer(float(factorized_value * trans.std + trans.mean)):
+                    return dictionary[int(factorized_value * trans.std + trans.mean)]
+                else:
+                    raise ValueError("factorized value you specified is not corresponding to any category")
+            else:
+                return dictionary[factorized_value]
 
     def nuniques(self):
         return self.variable_information["categorical_uniques"]
@@ -295,19 +337,12 @@ class TransformDF2Numpy:
             trans = self._get_transform(index_or_colname)
             if type(trans) == Factorizer:
                 return trans.num_uniques
-            else:
-                raise ValueError("Specified variable is not treated as a categorical variable.")
+            elif type(trans) == BinaryFactorizer:
+                return 2
+            elif type(trans) == NumericalHandler:
+                raise ValueError("Specified variable is a numerical variable.")
         else:
             return self.variable_information["categorical_uniques"]
-
-    def variables(self):
-        return self.variable_information["variables"]
-
-    def categorical_variables(self):
-        return self.variable_information["categorical_variables"]
-
-    def numerical_variables(self):
-        return self.variable_information["numerical_variables"]
 
     def _df_to_numpy(self, df):
         x_categorical = df[self.variable_information["categorical_variables"]].values
@@ -338,6 +373,10 @@ def _end_message_fit_transform(info):
     print("Number of the categorical variables:", len(info["categorical_variables"]))
     print("Number of the numerical variables:", len(info["numerical_variables"]))
     print("---------------------------------------------------")
+
+
+def _message_variable_dropped(col_name):
+    print("Variable Dropped because of containing only one unique value: (column: '%s')" % col_name)
 
 
 def _message_categories_thresholed(col_name, num_valids, num_dropped):
@@ -432,8 +471,10 @@ class Dropper:
     def __init__(self):
         pass
 
-    def fit_transform(self, df, col_name, variable_info):
+    def fit_transform(self, df, col_name, variable_info, obj_col_name):
         self.col_name = col_name
+        if logging and (col_name != obj_col_name):
+            _message_variable_dropped(col_name)
         return df, variable_info
 
     def transform(self, df, col_name):
@@ -489,19 +530,23 @@ class BinaryFactorizer:
         self.col_name = col_name
 
         df[col_name], self.dictionary = df[col_name].factorize()
+
+        # fill nan
         nan_count = (df[col_name].values == -1).sum()
         if self.fillnan_flag and nan_count:
             df.loc[df[col_name] == -1, col_name] = np.nan
             self.nan_value = _get_numerical_nan_value(df[col_name].values, self.fillnan_robustness_factor)
             df[col_name].fillna(self.nan_value, inplace=True)
-            _message_numerical_nans_filled(col_name, nan_count, self.nan_value) if logging else None
+            if logging:
+                _message_numerical_nans_filled(col_name, nan_count, self.nan_value)
         elif not self.fillnan_flag and nan_count:
             df.loc[df[col_name] == -1, col_name] = np.nan
 
+        # scaling
         if self.scaling_flag:
             self.mean, self.std = _get_mean_std_for_scaling(df[col_name].values,
-                                                           self.scaling_robustness_factor,
-                                                           col_name)
+                                                            self.scaling_robustness_factor,
+                                                            col_name)
             df[col_name] = (df[col_name].values - self.mean) / self.std
 
         variable_info["numerical_variables"].append(col_name)
