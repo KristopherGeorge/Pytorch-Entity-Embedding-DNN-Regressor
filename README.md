@@ -11,7 +11,7 @@ See the files ```model.py``` and ```demo.ipynb``` for more detail.
 ```model.py``` shows an implementation of DNN for regression with input of factorized (*) categorical variables (first half) and numerical variables (second half).  
 Preparing a unique Embedding Layer for each categorical variable and perform mapping to the corresponding dense vector space (Entity Embedding).  
 - *Example*:
-  - Mapping a categorical variable with 7 categories which elements are Mon.(0), Tue.(1), Wed.(2), Thu.(3), Fri.(4), Sat.(5), Sun.(6) to 2D space by an Embedding Layer)  
+  - Mapping a categorical variable with 7 categories which elements are Mon.(0), Tue.(1), Wed.(2), Thu.(3), Fri.(4), Sat.(5), Sun.(6) to 2D space by an Embedding Layer.  
   
 Regression is performed by combining the embedded categorical features and numerical variables and inputting them to Fully Connected Layers.  
   
