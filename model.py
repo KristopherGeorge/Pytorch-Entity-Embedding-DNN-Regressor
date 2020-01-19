@@ -131,32 +131,3 @@ class CategoricalDnn(nn.Module):
 
 
 
-#### test
-if __name__ == "__main__":
-
-    # number of categorical variables: 4
-    # number of numerical variables: 3
-    # batch size: 2
-    test_input = torch.tensor([[0., 3., 7., 4., 3.2, 1.22, -8.3],
-                               [2., 1., 6., 3., 1.3, 0.56, -1.67]])
-
-    # model definition
-    model = CategoricalDnn(categorical_dicts_to_dims=[[3, 2], [4, 2], [10, 4], [7, 3]],
-                           num_numerical_features=3,
-                           fc_layers_construction=[30, 20, 20],
-                           dropout_probability=0.)
-    model.train()
-    test_out = model(test_input)
-
-    # model definition without embedding layers
-    model2 = CategoricalDnn(categorical_dicts_to_dims=[],
-                            num_numerical_features=7,
-                            fc_layers_construction=[10, 10, 5, 5],
-                            dropout_probability=0.2)
-    model2.train()
-    test_out2 = model2(test_input)
-
-
-
-
-
