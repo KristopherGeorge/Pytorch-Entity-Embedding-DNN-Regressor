@@ -1,0 +1,8 @@
+numpy
+pandas
+torch
+torchvision
+sklearn
+jupyter
+matplotlib
+git+https://github.com/kitayama1234/TransformDF2Numpy
