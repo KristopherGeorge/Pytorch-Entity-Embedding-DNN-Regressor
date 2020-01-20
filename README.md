@@ -1,7 +1,7 @@
 ## Pytorch implementation of DNN-regressor using Entity Embedding[1]
 
-A Pytorch implementation of Entity Embedding DNN model.  
-And its general application to an experimental flow for a real-world tabular data.  
+A Pytorch implementation of a DNN model based on the "Entity Embedding" technique.  
+And its general application to a typical experimental flow for a real-world tabular data.  
 See the files ```model.py``` and ```demo.ipynb``` for more detail.  
   
 > [1] Guo, Cheng, and Felix Berkhahn. "Entity embeddings of categorical variables." arXiv preprint arXiv:1604.06737 (2016).  
