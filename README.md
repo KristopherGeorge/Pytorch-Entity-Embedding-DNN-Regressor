@@ -1,7 +1,7 @@
 ## Pytorch implementation of DNN-regressor using Entity Embedding[1]
 
-A Pytorch implementation of Entity Embedding DNN model.  
-And its general application to an experimental flow for a real-world tabular data.  
+A Pytorch implementation of a DNN model based on the "Entity Embedding" technique.  
+And its general application to a typical experimental flow for a real-world tabular data.  
 See the files ```model.py``` and ```demo.ipynb``` for more detail.  
   
 > [1] Guo, Cheng, and Felix Berkhahn. "Entity embeddings of categorical variables." arXiv preprint arXiv:1604.06737 (2016).  
@@ -20,6 +20,5 @@ Regression is performed by combining the embedded categorical features and numer
 ### demo.ipynb
 
 ```demo.ipynb``` shows a experimental flow for solving a real-world problem using ```model.py```.  
-By cooperating with ```model.py``` with [```df2numpy.TransformDF2Numpy```](https://github.com/kitayama1234/TransformDF2Numpy),
-a conversion tool from pandas.DaraFrame to numpy.array, it realizes generality applicable to various tabler dataset.
-
+By linking ```model.py``` with [```df2numpy.TransformDF2Numpy```](https://github.com/kitayama1234/TransformDF2Numpy) which is a tool for transforming pandas.DaraFrame to numpy.array,
+the experimental flow realizes generality which is applicable to various tabler dataset.
