@@ -20,6 +20,5 @@ Regression is performed by combining the embedded categorical features and numer
 ### demo.ipynb
 
 ```demo.ipynb``` shows a experimental flow for solving a real-world problem using ```model.py```.  
-By cooperating with ```model.py``` with [```df2numpy.TransformDF2Numpy```](https://github.com/kitayama1234/TransformDF2Numpy),
-a conversion tool from pandas.DaraFrame to numpy.array, it realizes generality applicable to various tabler dataset.
-
+By linking ```model.py``` with [```df2numpy.TransformDF2Numpy```](https://github.com/kitayama1234/TransformDF2Numpy) which is a tool for transforming pandas.DaraFrame to numpy.array,
+the experimental flow realizes generality which is applicable to various tabler dataset.
