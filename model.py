@@ -19,7 +19,7 @@ Regression is performed by combining the embedded categorical features and numer
 ##### Input when creating a model #####
 #######################################
 
-    categorical_dicts_to_dims  : Embedding Layer design for each categorical variable, specified by multiple pairs of
+ categorical_nuniques_to_dims  : Embedding Layer design for each categorical variable, specified by multiple pairs of
                                  [(number of dictionaries), (dimension of the embedded feature)].
                                  Specifying an empty list results in
                                  a regular fully connected network without categorical variables.
@@ -49,17 +49,17 @@ Regression is performed by combining the embedded categorical features and numer
 
 class CategoricalDnn(nn.Module):
     def __init__(self,
-                 categorical_dicts_to_dims,
+                 categorical_nuniques_to_dims,
                  num_numerical_features,
                  fc_layers_construction,
                  dropout_probability=0.):
         super(CategoricalDnn, self).__init__()
 
-        self._make_embedding_layers(categorical_dicts_to_dims)
+        self._make_embedding_layers(categorical_nuniques_to_dims)
 
         self._make_fc_layers(num_numerical_features, fc_layers_construction, dropout_probability)
 
-    def _make_embedding_layers(self, dicts_to_dims):
+    def _make_embedding_layers(self, nuniques_to_dims):
         """
         Define Embedding Layers of categorical variables.
          Properties:
@@ -68,16 +68,16 @@ class CategoricalDnn(nn.Module):
              self.num_embedded_features        :   Total number of embedded features from categorical variables
              self.num_each_embedded_features   :   Number of embedded features for each categorical variable
         """
-        self.num_categorical_features = len(dicts_to_dims)
+        self.num_categorical_features = len(nuniques_to_dims)
         self.num_embedded_features = 0
         self.num_each_embedded_features = []
         self.embedding_layer_list = nn.ModuleList()
-        for dict_to_dim in dicts_to_dims:
-            num_dict = dict_to_dim[0]
-            target_dim = dict_to_dim[1]
+        for nunique_to_dim in nuniques_to_dims:
+            num_uniques = nunique_to_dim[0]
+            target_dim = nunique_to_dim[1]
             self.embedding_layer_list.append(
                 nn.Sequential(
-                    nn.Embedding(num_dict, target_dim),
+                    nn.Embedding(num_uniques, target_dim),
                     nn.BatchNorm1d(target_dim),
                     # nn.ReLU(inplace=True)
                 )
