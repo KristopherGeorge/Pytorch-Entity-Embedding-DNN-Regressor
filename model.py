@@ -79,7 +79,7 @@ class CategoricalDnn(nn.Module):
                 nn.Sequential(
                     nn.Embedding(num_uniques, target_dim),
                     nn.BatchNorm1d(target_dim),
-                    # nn.ReLU(inplace=True)
+                    nn.ReLU(inplace=True)
                 )
             )
             self.num_embedded_features += target_dim
